@@ -1,0 +1,103 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+@prefix saref: <https://saref.etsi.org/core/> .
+@prefix nsiot: <http://example.org/neuro-symbolic-iot#> .
+
+### =====================================================================
+### ADL PROCEDURAL EXTENSION
+### Task models for scripted activities of daily living (ADL) and the
+### vocabulary for task-execution errors. Extends the Neuro-Symbolic IoT
+### Smart Home Ontology; the namespace and SOSA/SAREF alignment are shared.
+### Task models follow the published CASAS Kyoto ADL protocol
+### (Cook & Schmitter-Edgecombe, 2009) and are written without reference
+### to error-labelled data.
+### =====================================================================
+nsiot:ADLProceduralExtension rdf:type owl:Ontology ;
+    owl:versionInfo "1.0.0" ;
+    rdfs:label "ADL Procedural Extension" ;
+    owl:imports nsiot:NeuroSymbolicIoTOntology .
+
+### --- Sensors (SOSA/SAREF aligned) -------------------------------------
+nsiot:ItemPresenceSensor rdf:type owl:Class ; rdfs:subClassOf sosa:Sensor ;
+    rdfs:comment "Detects whether a tagged item is present at its storage location." .
+nsiot:WaterFlowSensor rdf:type owl:Class ; rdfs:subClassOf sosa:Sensor, saref:Sensor .
+nsiot:BurnerSensor rdf:type owl:Class ; rdfs:subClassOf sosa:Sensor, saref:Sensor .
+nsiot:PhoneUseSensor rdf:type owl:Class ; rdfs:subClassOf sosa:Sensor .
+
+### --- Task model vocabulary -------------------------------------------
+nsiot:ADLTask rdf:type owl:Class .
+nsiot:ProceduralStep rdf:type owl:Class .
+nsiot:Postcondition rdf:type owl:Class ;
+    rdfs:comment "A device state that must hold when the task ends (e.g., burner off)." .
+
+nsiot:requiresStep rdf:type owl:ObjectProperty ; rdfs:domain nsiot:ADLTask ; rdfs:range nsiot:ProceduralStep .
+nsiot:hasPostcondition rdf:type owl:ObjectProperty ; rdfs:domain nsiot:ADLTask ; rdfs:range nsiot:Postcondition .
+nsiot:evidencedBy rdf:type owl:ObjectProperty ; rdfs:domain nsiot:ProceduralStep ; rdfs:range sosa:Sensor ;
+    rdfs:comment "A step is evidenced if any of its sensors reports during the episode." .
+nsiot:monitoredBy rdf:type owl:ObjectProperty ; rdfs:domain nsiot:Postcondition ; rdfs:range sosa:Sensor .
+nsiot:offThreshold rdf:type owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain nsiot:Postcondition ; rdfs:range xsd:double ;
+    rdfs:comment "Highest final reading observed in correct executions; asserted at run time from training data." .
+
+### --- Episodes and errors ---------------------------------------------
+nsiot:TaskEpisode rdf:type owl:Class ;
+    rdfs:comment "One observed execution of an ADL task by one person." .
+nsiot:ExecutionError rdf:type owl:Class ; rdfs:subClassOf nsiot:TaskEpisode .
+
+nsiot:executesTask rdf:type owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain nsiot:TaskEpisode ; rdfs:range nsiot:ADLTask .
+nsiot:hasParticipant rdf:type owl:ObjectProperty ; rdfs:domain nsiot:TaskEpisode ; rdfs:range nsiot:Person .
+nsiot:observedBy rdf:type owl:ObjectProperty ; rdfs:domain nsiot:TaskEpisode ; rdfs:range sosa:Sensor .
+nsiot:isFinalObservationOf rdf:type owl:ObjectProperty ; rdfs:domain sosa:Observation ; rdfs:range nsiot:TaskEpisode .
+nsiot:hasMissingStep rdf:type owl:ObjectProperty ; rdfs:domain nsiot:ExecutionError ; rdfs:range nsiot:ProceduralStep .
+nsiot:violatesPostcondition rdf:type owl:ObjectProperty ; rdfs:domain nsiot:ExecutionError ; rdfs:range nsiot:Postcondition .
+
+### --- Sensor individuals (channel roles established from the data) ---
+nsiot:I01 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "oatmeal" .
+nsiot:I02 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "raisins" .
+nsiot:I03 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "brown sugar" .
+nsiot:I04 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "bowl" .
+nsiot:I05 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "measuring spoon" .
+nsiot:I06 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "medicine container" .
+nsiot:I07 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "pot" .
+nsiot:I08 rdf:type nsiot:ItemPresenceSensor ; rdfs:label "phone book" .
+nsiot:asterisk rdf:type nsiot:PhoneUseSensor ; rdfs:label "telephone" .
+nsiot:AD1-A rdf:type nsiot:BurnerSensor ; rdfs:label "stove burner" .
+nsiot:AD1-B rdf:type nsiot:WaterFlowSensor ; rdfs:label "sink water flow (channel B)" .
+nsiot:AD1-C rdf:type nsiot:WaterFlowSensor ; rdfs:label "sink water flow (channel C)" .
+
+### --- Task models (from the scripted protocol) -------------------------
+nsiot:Task_PhoneCall rdf:type nsiot:ADLTask ;
+    nsiot:requiresStep nsiot:Step_LookUpNumber, nsiot:Step_UsePhone .
+nsiot:Step_LookUpNumber rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I08 .
+nsiot:Step_UsePhone rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:asterisk .
+
+nsiot:Task_WashHands rdf:type nsiot:ADLTask ;
+    nsiot:requiresStep nsiot:Step_RunWater ;
+    nsiot:hasPostcondition nsiot:Post_WaterOff .
+nsiot:Step_RunWater rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:AD1-B, nsiot:AD1-C .
+nsiot:Post_WaterOff rdf:type nsiot:Postcondition ; nsiot:monitoredBy nsiot:AD1-B, nsiot:AD1-C .
+
+nsiot:Task_Cook rdf:type nsiot:ADLTask ;
+    nsiot:requiresStep nsiot:Step_GetOatmeal, nsiot:Step_GetRaisins, nsiot:Step_GetBrownSugar,
+        nsiot:Step_GetBowl, nsiot:Step_GetMeasuringSpoon, nsiot:Step_GetPot,
+        nsiot:Step_MeasureWater, nsiot:Step_HeatOnBurner ;
+    nsiot:hasPostcondition nsiot:Post_BurnerOff .
+nsiot:Step_GetOatmeal rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I01 .
+nsiot:Step_GetRaisins rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I02 .
+nsiot:Step_GetBrownSugar rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I03 .
+nsiot:Step_GetBowl rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I04 .
+nsiot:Step_GetMeasuringSpoon rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I05 .
+nsiot:Step_GetPot rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I07 .
+nsiot:Step_MeasureWater rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:AD1-B, nsiot:AD1-C .
+nsiot:Step_HeatOnBurner rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:AD1-A .
+nsiot:Post_BurnerOff rdf:type nsiot:Postcondition ; nsiot:monitoredBy nsiot:AD1-A .
+
+nsiot:Task_Eat rdf:type nsiot:ADLTask ;
+    nsiot:requiresStep nsiot:Step_TakeMedicine .
+nsiot:Step_TakeMedicine rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:I06 .
+
+nsiot:Task_Clean rdf:type nsiot:ADLTask ;
+    nsiot:requiresStep nsiot:Step_RinseDishes .
+nsiot:Step_RinseDishes rdf:type nsiot:ProceduralStep ; nsiot:evidencedBy nsiot:AD1-B, nsiot:AD1-C .

@@ -1,0 +1,50 @@
+# Task-execution error detection on CASAS Kyoto ADL (episode level).
+# One episode = one participant performing one scripted task.
+project:
+  seed: 42
+
+datasets:
+  casas:
+    # Unzip the Zenodo record 10.5281/zenodo.15712834 so that this folder
+    # contains adl_error/*.csv and adl_noerror/*.csv
+    raw_dir: data/raw/casas_kyoto_adl
+    file_globs:
+      - "adl_error/*.csv"
+      - "adl_noerror/*.csv"
+
+neural_perception:
+  device: auto
+
+adl_errors:
+  output_dir: outputs/adl_errors
+  k_folds: 5
+  # Seeds for the neural models; 42 is the reference run reported in tables.
+  seeds: [42, 43, 44, 45, 46]
+  bootstrap_resamples: 2000
+
+  # Label scarcity: number of error-labelled participants kept per training fold
+  scarcity:
+    levels: [1, 2, 4, 8]
+    reps: 3
+
+  # Analog channel discretisation for the GRU vocabulary
+  levels:
+    burner_idle: 2.80
+    burner_step: 0.1
+    water_step: 0.1
+    max_level: 6
+
+  gru:
+    max_seq_len: 300
+    emb_dim: 32
+    hidden_size: 64
+    num_layers: 1
+    dropout: 0.2
+    batch_size: 16
+    epochs: 40
+    lr: 0.001
+    # Seconds are divided by this before entering the GRU
+    time_scale_s: 60.0
+
+  # Decision threshold on P(error) for neural models and fusion
+  decision_threshold: 0.5

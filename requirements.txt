@@ -1,0 +1,8 @@
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
+scikit-learn>=1.2
+PyYAML>=6.0
+matplotlib>=3.8
+torch>=2.0
+rdflib>=7.0
