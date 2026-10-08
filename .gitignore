@@ -2,6 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-data/
-outputs/
-paper_assets/
+/data/
+/outputs/
+/paper_assets/
