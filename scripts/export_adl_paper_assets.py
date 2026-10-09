@@ -84,12 +84,15 @@ def write_macros(
         lo, hi = summary["f1_ci"][meth]
         m[_macro_name(meth, "f1 lo")] = f"{lo:.2f}"
         m[_macro_name(meth, "f1 hi")] = f"{hi:.2f}"
+    def signed(v: float) -> str:
+        # Math mode so negative values get a true minus sign; a rounded zero has no sign
+        return "$0.00$" if abs(v) < 0.005 else f"${v:+.2f}$"
+
     for pair, d in summary["paired_f1_diff_ci"].items():
         a, b = pair.split("-", 1)
-        # Math mode so negative values get a true minus sign
-        m[_macro_name("diff", a, b)] = f"${d['diff']:+.2f}$"
-        m[_macro_name("diff", a, b, "lo")] = f"${d['ci95'][0]:+.2f}$"
-        m[_macro_name("diff", a, b, "hi")] = f"${d['ci95'][1]:+.2f}$"
+        m[_macro_name("diff", a, b)] = signed(d["diff"])
+        m[_macro_name("diff", a, b, "lo")] = signed(d["ci95"][0])
+        m[_macro_name("diff", a, b, "hi")] = signed(d["ci95"][1])
     for meth, d in summary.get("seed_f1", {}).items():
         m[_macro_name("seed", meth, "mean")] = f"{d['mean']:.2f}"
         m[_macro_name("seed", meth, "std")] = f"{d['std']:.2f}"
@@ -232,18 +235,20 @@ def plot_scarcity(scar: pd.DataFrame, summary: Dict[str, Any], dest: Path) -> No
         ax.plot(xs, ys, color=color, marker=marker, linestyle=ls, linewidth=1.5, markersize=4.5, label=meth, zorder=3)
         if meth not in LABEL_FREE:
             ax.fill_between(xs, [y - s for y, s in zip(ys, sd)], [y + s for y, s in zip(ys, sd)], color=color, alpha=0.12, linewidth=0)
-        ax.annotate(meth, (xs[-1], ys[-1]), xytext=(6, 0), textcoords="offset points", va="center", fontsize=7.5, color=INK)
     ax.set_xscale("log", base=2)
     ax.set_xticks(xs_all)
     ax.set_xticklabels([str(x) if x != full_n else f"{full_n}\n(all)" for x in xs_all])
-    ax.set_xlim(0.85, full_n * 1.9)
+    ax.set_xlim(0.85, full_n * 1.15)
     ax.set_ylim(0, 1)
     ax.set_xlabel("Error-labelled participants in training fold")
     ax.set_ylabel("F1 (error class)")
     ax.grid(axis="y", color=GRID, linewidth=0.6)
     for side in ["top", "right"]:
         ax.spines[side].set_visible(False)
-    ax.legend(loc="lower right", frameon=False, ncol=4, fontsize=7, handlelength=2.6)
+    names = {"Rules": "Rules", "IForest": "Isolation forest", "RF": "Random forest", "GRU": "GRU", "NeSy": "NeSy"}
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles, [names[l] for l in labels], loc="lower center", bbox_to_anchor=(0.5, 1.02),
+              frameon=False, ncol=5, fontsize=7, handlelength=2.6, columnspacing=1.2)
     fig.tight_layout()
     fig.savefig(dest / "fig_scarcity.pdf")
     fig.savefig(dest / "fig_scarcity.png", dpi=200)
