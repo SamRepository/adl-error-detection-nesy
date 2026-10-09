@@ -2,7 +2,10 @@
 Task-execution error detection on CASAS Kyoto ADL (episode level)
 =================================================================
 Compares, under participant-grouped stratified k-fold CV:
-  - Rules       : procedural rules over task models (no error examples used)
+  - Rules       : procedural rules over task models; off-thresholds estimated
+                  from correct training executions (the task models themselves
+                  were designed after exploratory analysis of the full corpus)
+  - IForest     : per-task isolation forest fitted on correct executions
   - LogReg / RF : classical models on bag-of-sensor summary features
   - GRU         : CasasGRUClassifier over the episode event sequence
   - GRU-motion  : GRU on motion events only (confound control)
@@ -11,6 +14,11 @@ Compares, under participant-grouped stratified k-fold CV:
 Outputs (under adl_errors.output_dir):
   predictions.csv, summary.json, per_task.csv, explanations.csv,
   confound.json, tables/*.tex
+
+Known limitation of the optional --scarcity sweep (not used in the paper):
+with 1-2 error-labelled participants the inner validation split often has
+no error episodes, so best-epoch selection by validation macro-F1 does not
+measure error detection. A warning is logged when this happens.
 
 Usage (Bash):
   python -m scripts.run_adl_error_detection --config config/adl_error_detection.yaml
@@ -150,6 +158,8 @@ def train_gru_fold(
     fit_idx, val_idx = next(inner.split(tr.index, tr["has_error"].astype(int), groups=tr["participant"]))
     fit_ids = [train_ids[i] for i in fit_idx]
     val_ids = [train_ids[i] for i in val_idx]
+    if not ep.loc[val_ids, "has_error"].any():
+        log.warning("Validation split has no error episodes; checkpoint selection cannot measure error detection.")
 
     vocab: Dict[str, int] = {"<PAD>": 0, "<UNK>": 1}
     for i in fit_ids:
@@ -329,7 +339,10 @@ def run_scarcity(
     out_dir: Path,
 ) -> pd.DataFrame:
     """Train with all correct executions but only ``m`` error-labelled
-    participants per fold. Rules are unaffected (they use no error labels)."""
+    participants per fold. Rule thresholds use no error episodes, but the task
+    models were designed with full-corpus error data, so this sweep does not
+    measure end-to-end label efficiency. See the module docstring for its
+    known validation-split limitation."""
     ep = episodes.set_index("episode_id")
     rows = []
     for m in levels:
@@ -445,7 +458,7 @@ def main() -> int:
         rf.fit(Xtr, ytr)
         preds.loc[te_mask, "score_RF"] = rf.predict_proba(Xte)[:, 1]
 
-        # Label-free data-driven baseline: per-task Isolation Forest fitted on
+        # Baseline fitted without error episodes: per-task Isolation Forest fitted on
         # correct training executions; threshold = least normal training score
         # (the same calibration principle as the rules' off-levels).
         num_cols = [c for c in feats.columns if not c.startswith("task_")]

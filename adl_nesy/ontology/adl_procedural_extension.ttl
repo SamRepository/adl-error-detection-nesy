@@ -11,9 +11,12 @@
 ### Task models for scripted activities of daily living (ADL) and the
 ### vocabulary for task-execution errors. Extends the Neuro-Symbolic IoT
 ### Smart Home Ontology; the namespace and SOSA/SAREF alignment are shared.
-### Task models follow the published CASAS Kyoto ADL protocol
-### (Cook & Schmitter-Edgecombe, 2009) and are written without reference
-### to error-labelled data.
+### Task-model steps are constrained by the published CASAS Kyoto ADL
+### protocol (Cook & Schmitter-Edgecombe, 2009), but they were selected,
+### and the sensor-channel roles assigned, after exploratory analysis of
+### the full corpus, including summaries comparing erroneous and correct
+### executions. Off-thresholds are estimated from correct training
+### executions only; the design itself is not independent of error data.
 ### =====================================================================
 nsiot:ADLProceduralExtension rdf:type owl:Ontology ;
     owl:versionInfo "1.0.0" ;

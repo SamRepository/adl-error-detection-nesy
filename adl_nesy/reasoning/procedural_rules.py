@@ -12,9 +12,18 @@ Two generic rules operate over task models declared in
   ``ExecutionError`` with ``violatesPostcondition``.
 
 The rules are task-agnostic; all task knowledge lives in the ontology.
-Off-thresholds are the only data-derived quantities and are calibrated on
-correct (error-free) training executions only, so the symbolic detector
-never sees an error example.
+Off-thresholds are estimated from correct training executions only (condition
+labels select those executions; inference does not use labels). The task
+models and channel roles were designed after exploratory analysis of the full
+corpus, including erroneous executions, so the detector as a whole is not
+independent of error data.
+
+Semantics: a step counts as evidenced if any of its sensors reported any
+event in the episode (closed world: no event means missing evidence, which
+can also reflect a sensor that did not record). A postcondition is checked
+only when the episode has a final reading on a monitored sensor; a
+postcondition without calibration data gets an infinite threshold and never
+fires.
 """
 from __future__ import annotations
 

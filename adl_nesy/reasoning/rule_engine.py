@@ -2,9 +2,12 @@
 Fixed-point rule engine over an rdflib graph.
 
 Each rule is a SPARQL ``CONSTRUCT`` query given as ``(rule_id, label, query)``.
-Rules are fired repeatedly until no new triples are produced, so rules may
-consume each other's conclusions (the semantics of a forward-chaining SWRL
-rule set restricted to what SPARQL can express).
+Rules are fired repeatedly until no new triples are produced. The two
+procedural rules do not depend on each other, so a single pass would give the
+same result; the loop is an implementation choice that allows dependent rules.
+The engine evaluates SPARQL over an rdflib graph only: it does not load
+``owl:imports`` and does not perform OWL reasoning. A failing rule query
+raises an error.
 """
 from __future__ import annotations
 
@@ -45,8 +48,9 @@ def fire_rules(
             try:
                 triples = list(g.query(PREFIXES + query))
             except Exception as exc:  # rdflib SPARQL parse / runtime error
-                log.warning("Rule %d query failed: %s", rid, exc)
-                continue
+                # Fail loudly: a silently skipped rule would look like an
+                # episode without errors.
+                raise RuntimeError(f"Rule {rid} query failed") from exc
             added_for_rule = 0
             for triple in triples:
                 if len(triple) != 3:
