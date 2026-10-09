@@ -62,7 +62,10 @@ python -m scripts.run_adl_rule_sensitivity --config config/adl_error_detection.y
 python -m scripts.derive_revision_analyses --config config/adl_error_detection.yaml \
     --results outputs/adl_errors --out outputs/revision
 
-# 4. LaTeX number macros and tables used by the paper
+# 4. Trade-off figure (Fig. 2) and its numbers, from the saved predictions
+python -m scripts.plot_tradeoff --results outputs/adl_errors     --derived outputs/revision --dest paper_assets
+
+# 5. LaTeX number macros and tables used by the paper (needs step 4)
 python -m scripts.export_revision_assets --results outputs/adl_errors \
     --derived outputs/revision --dest paper_assets
 ```
@@ -76,6 +79,7 @@ cross-validation. Results are deterministic on CPU.
 | `outputs/adl_errors/per_task.csv` | Table 3 |
 | `outputs/adl_errors/rule_sensitivity.json` | Rule robustness |
 | `outputs/revision/*.json` | Fusion trade-off, explanations, confound checks, manifest |
+| `paper_assets/fig_tradeoff.pdf`, `outputs/revision/tradeoff.json` | Fig. 2 (operating points, detections per task) |
 
 `--scarcity` (step 1) runs an additional label-scarcity sweep that is **not used in the
 paper**. With 1–2 error-labelled participants, its inner validation split often contains

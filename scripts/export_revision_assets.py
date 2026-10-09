@@ -9,6 +9,8 @@ derive_revision_analyses.py, and writes (no hand-typed numbers):
   overall.tex     Table 2 (pooled results, grouped by information used)
   per_task_f1.tex Table 3 (F1 per task)
 
+The figure and its tradeoff.json come from plot_tradeoff.py, which must run first.
+
 The v2 assets (with the label-scarcity figure) are produced by
 export_adl_paper_assets.py and are not used by the revision.
 
@@ -143,6 +145,17 @@ def write_macros(s: Dict[str, Any], per_task: pd.DataFrame, sens: Dict[str, Any]
         m[_name("thr", col, "max")] = f"{th[col].max():.2f}"
     m["LatencyRules"] = f"{s['latency_ms_per_episode']['Rules']:.1f}"
     m["LatencyGRU"] = f"{s['latency_ms_per_episode']['GRU']:.1f}"
+    to = d["tradeoff"]
+    for meth in ["RF", "LogReg", "GRU"]:
+        m[_name("recall at rules fpr", meth)] = f"{to['curves'][meth]['recall_at_rules_fpr']:.2f}"
+        m[_name(meth, "auroc")] = f"{to['curves'][meth]['auroc']:.3f}"
+    for meth in ["Rules", "NeSy"]:
+        p = to["points"][meth]
+        m[_name(meth, "recall lo")], m[_name(meth, "recall hi")] = (f"{v:.2f}" for v in p["recall_ci95"])
+        m[_name(meth, "fpr lo")], m[_name(meth, "fpr hi")] = (f"{100 * v:.1f}" for v in p["fpr_ci95"])
+    for task, t in to["per_task"].items():
+        for key in ["tp_rules", "tp_gru_added", "fp_rules", "fp_gru_added", "missed_by_fusion"]:
+            m[_name("task", task, key)] = str(t[key])
     m["MissingFinalWash"] = str(d["rerun"]["episodes_without_final_reading_on_monitored_sensor"]["WashHands"])
 
     for _, r in per_task.iterrows():
@@ -227,6 +240,7 @@ def main() -> int:
         "iforest": load(der / "iforest_cutoffs.json"),
         "rerun": load(der / "rule_rerun.json"),
         "manifest": load(der / "manifest.json"),
+        "tradeoff": load(der / "tradeoff.json"),
     }
     write_macros(summary, per_task, sens, derived, dest)
     write_tables(summary, derived["confusion"], per_task, dest)
