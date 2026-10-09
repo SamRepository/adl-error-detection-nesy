@@ -5,15 +5,25 @@ Reads the saved out-of-fold predictions of run_adl_error_detection.py (no
 retraining) and writes:
 
   fig_tradeoff.pdf  (a) recall vs. false-positive rate: ROC curves of the
-                    continuous-score methods, with the rules and the OR fusion
-                    as single operating points (participant-bootstrap 95% CIs);
+                    continuous-score methods over their pooled out-of-fold
+                    scores, each method's reported operating point as a hollow
+                    marker, and the rules and the OR fusion as single operating
+                    points (participant-bootstrap 95% CIs);
                     (b) per task, error-condition episodes caught by the rules,
                     added by the GRU in the fusion, or missed, and false alarms
                     by source
   tradeoff.json     every number drawn in the figure
 
-ROC curves trace all thresholds on the pooled out-of-fold scores; a point on a
-curve other than the method's default cutoff is therefore chosen post hoc.
+ROC curves sweep one global threshold over the pooled out-of-fold scores, so
+any point on a curve is a post-hoc threshold diagnostic. The reported operating
+points of RF, LogReg and the GRU (score >= 0.5) lie on their curves. The
+isolation forest's reported point uses task- and fold-specific cutoffs on its
+anomaly scores, so it need not lie on its pooled-score ROC; it is drawn as
+reported and not moved onto the curve.
+
+recall_at_rules_fpr is the highest recall a curve reaches at an FPR no greater
+than the rules' FPR (an FPR budget, not an exact-rate match); the FPR at which
+it is reached is stored alongside it.
 
 Usage:
   python -m scripts.plot_tradeoff --results <outputs/adl_errors> \
@@ -46,20 +56,25 @@ TASKS = ["PhoneCall", "WashHands", "Cook", "Eat", "Clean"]
 
 # Same palette slots as the v2 figure; markers and line styles give a second,
 # colour-independent encoding.
+# Legend names match the column heads of Table 3.
 CURVES = {
-    "RF": ("Random forest", "#1baf7a", "s", "--"),
-    "LogReg": ("Logistic regression", "#7d5bbe", "P", (0, (3, 1, 1, 1))),
+    "RF": ("RF", "#1baf7a", "s", "--"),
+    "LogReg": ("LogReg", "#7d5bbe", "P", (0, (3, 1, 1, 1))),
     "GRU": ("GRU", "#eda100", "^", "-."),
-    "IForest": ("Isolation forest", "#eb6834", "v", (0, (1, 1))),
+    "IForest": ("IForest", "#eb6834", "v", (0, (1, 1))),
 }
 POINTS = {
-    "Rules": ("Procedural rules", "#2a78d6", "o"),
+    "Rules": ("Rules", "#2a78d6", "o"),
     "NeSy": (r"Rules $\vee$ GRU", "#e87ba4", "D"),
 }
 INK = "#0b0b0b"
 MUTED = "#52514e"
 GRID = "#e1e0d9"
 MISSED = "#d9d8d2"
+# Nominal sizes; the figure is included at about 0.99 scale, so 7 pt prints at
+# about 6.9 pt (Springer asks for at least 6 pt).
+FS_TEXT = 7.0
+FS_TITLE = 7.6
 
 
 def parse_args() -> argparse.Namespace:
@@ -97,13 +112,19 @@ def compute(df: pd.DataFrame) -> Dict[str, Any]:
         out["points"][meth] = {"fpr": f, "recall": r, **_bootstrap_rates(df, f"pred_{meth}")}
     rules_fpr = out["points"]["Rules"]["fpr"]
     for meth in CURVES:
-        fpr, tpr, _ = roc_curve(y, df[f"score_{meth}"])
+        # Every distinct threshold, so the FPR-budget maximum cannot be missed
+        fpr, tpr, _ = roc_curve(y, df[f"score_{meth}"], drop_intermediate=False)
         f, r = _rates(y, df[f"pred_{meth}"].to_numpy())
+        within = np.flatnonzero(fpr <= rules_fpr + 1e-12)
+        best = int(within[np.argmax(tpr[within])])
         out["curves"][meth] = {
             "auroc": float(roc_auc_score(y, df[f"score_{meth}"])),
-            "default_fpr": f, "default_recall": r,
-            # Highest recall on the curve without exceeding the rules' FPR (post hoc)
-            "recall_at_rules_fpr": float(tpr[fpr <= rules_fpr + 1e-12].max()),
+            # Reported operating point (IForest: task- and fold-specific cutoffs)
+            "reported_fpr": f, "reported_recall": r,
+            "reported_point_on_pooled_roc": bool(np.any((np.abs(fpr - f) < 1e-12) & (np.abs(tpr - r) < 1e-12))),
+            # Highest recall at an FPR no greater than the rules' (post hoc)
+            "recall_at_rules_fpr": float(tpr[best]),
+            "fpr_at_that_recall": float(fpr[best]),
             "fpr": fpr.tolist(), "tpr": tpr.tolist(),
         }
     per_task = {}
@@ -122,16 +143,16 @@ def compute(df: pd.DataFrame) -> Dict[str, Any]:
 
 
 def plot(res: Dict[str, Any], dest: Path) -> None:
-    plt.rcParams.update({"font.family": "serif", "font.size": 7, "axes.edgecolor": MUTED, "axes.labelcolor": INK,
-                         "xtick.color": MUTED, "ytick.color": MUTED, "pdf.fonttype": 42})
-    fig, (ax, bx) = plt.subplots(1, 2, figsize=(4.8, 2.45), gridspec_kw={"width_ratios": [1.0, 1.08]})
+    plt.rcParams.update({"font.family": "serif", "font.size": FS_TEXT, "axes.edgecolor": MUTED,
+                         "axes.labelcolor": INK, "xtick.color": MUTED, "ytick.color": MUTED, "pdf.fonttype": 42})
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(4.8, 2.95), gridspec_kw={"width_ratios": [1.0, 1.08]})
 
     # (a) operating points
     for meth, (label, color, marker, ls) in CURVES.items():
         c = res["curves"][meth]
         ax.plot(c["fpr"], c["tpr"], color=color, linestyle=ls, linewidth=1.1, drawstyle="steps-post",
                 label=f"{label} ({c['auroc']:.2f})", zorder=2)
-        ax.plot(c["default_fpr"], c["default_recall"], marker=marker, markersize=4, markerfacecolor="white",
+        ax.plot(c["reported_fpr"], c["reported_recall"], marker=marker, markersize=4, markerfacecolor="white",
                 markeredgecolor=color, markeredgewidth=1.0, linestyle="none", zorder=3)
     for meth, (label, color, marker) in POINTS.items():
         p = res["points"][meth]
@@ -144,18 +165,18 @@ def plot(res: Dict[str, Any], dest: Path) -> None:
                 arrowprops={"arrowstyle": "-|>", "color": MUTED, "lw": 0.8, "shrinkA": 4, "shrinkB": 4}, zorder=5)
     added_tp = round((n["recall"] - r["recall"]) * res["n_error"])
     added_fp = round((n["fpr"] - r["fpr"]) * res["n_correct"])
-    ax.text(0.012, 1.11, f"Rules → fusion:\n+{added_tp} caught, +{added_fp} false alarms",
-            fontsize=5.6, color=MUTED, ha="left", va="top", linespacing=1.2)
+    ax.text(0.012, 1.235, f"Rules → fusion:\n+{added_tp} caught, +{added_fp} false alarms",
+            fontsize=FS_TEXT, color=MUTED, ha="left", va="top", linespacing=1.15)
     ax.set_xlim(0, 0.5)
     ax.set_xticks([0, 0.1, 0.2, 0.3, 0.4, 0.5])
-    ax.set_ylim(0, 1.12)
+    ax.set_ylim(0, 1.24)
     ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax.set_xlabel("False-positive rate")
     ax.set_ylabel("Recall")
     ax.grid(color=GRID, linewidth=0.5)
-    ax.set_title("(a) Operating points", fontsize=7.5, loc="left")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.45, -0.27), ncol=2, fontsize=6, frameon=False,
-              handlelength=2.2, columnspacing=0.8, labelspacing=0.3)
+    ax.set_title("(a) Operating points", fontsize=FS_TITLE, loc="left")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.45, -0.22), ncol=2, fontsize=FS_TEXT, frameon=False,
+              handlelength=2.2, columnspacing=1.0, labelspacing=0.3)
 
     # (b) per task, diverging: false alarms left, error detections right
     pt = res["per_task"]
@@ -180,11 +201,11 @@ def plot(res: Dict[str, Any], dest: Path) -> None:
     bx.set_xlabel("False alarms  |  Error episodes")
     bx.grid(axis="x", color=GRID, linewidth=0.5)
     bx.set_axisbelow(True)
-    bx.set_title("(b) Detections per task", fontsize=7.5, loc="left")
+    bx.set_title("(b) Detections per task", fontsize=FS_TITLE, loc="left")
     handles = [plt.Rectangle((0, 0), 1, 1, color=rules_c), plt.Rectangle((0, 0), 1, 1, color=gru_c),
                plt.Rectangle((0, 0), 1, 1, color=MISSED)]
-    bx.legend(handles, ["Rules", "Added by GRU", "Missed"], loc="upper center", bbox_to_anchor=(0.45, -0.27),
-              ncol=3, fontsize=6, frameon=False, handlelength=1.2, columnspacing=1.0)
+    bx.legend(handles, ["Rules", "Added by GRU", "Missed"], loc="upper center", bbox_to_anchor=(0.45, -0.22),
+              ncol=3, fontsize=FS_TEXT, frameon=False, handlelength=1.2, columnspacing=0.9)
     for a in (ax, bx):
         for side in ["top", "right"]:
             a.spines[side].set_visible(False)
